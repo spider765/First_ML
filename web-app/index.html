@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cuisine Matcher</title>
+<script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        margin: 30px;
+        background: #f5f5f5;
+    }
+    h1 {
+        color: #333;
+    }
+    #wrapper {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 12px;
+        max-width: 600px;
+    }
+    .boxCont {
+        background: white;
+        padding: 12px;
+        border-radius: 6px;
+        border: 1px solid #ddd;
+    }
+    button {
+        margin-top: 20px;
+        padding: 12px 20px;
+        background: #2e7d32;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+    }
+    button:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+    #result {
+        margin-top: 20px;
+        font-weight: bold;
+    }
+</style>
+</head>
+<body>
+<h1>Check your refrigerator. What can you create?</h1>
+<div id="wrapper">
+    <div class="boxCont">
+        <input type="checkbox" value="4" class="checkbox">
+        <label>Apple</label>
+    </div>
+    <div class="boxCont">
+        <input type="checkbox" value="247" class="checkbox">
+        <label>Pear</label>
+    </div>
+    <div class="boxCont">
+        <input type="checkbox" value="77" class="checkbox">
+        <label>Cherry</label>
+    </div>
+    <div class="boxCont">
+        <input type="checkbox" value="126" class="checkbox">
+        <label>Fenugreek</label>
+    </div>
+    <div class="boxCont">
+        <input type="checkbox" value="302" class="checkbox">
+        <label>Sake</label>
+    </div>
+    <div class="boxCont">
+        <input type="checkbox" value="327" class="checkbox">
+        <label>Soy sauce</label>
+    </div>
+    <div class="boxCont">
+        <input type="checkbox" value="112" class="checkbox">
+        <label>Cumin</label>
+    </div>
+</div>
+<button id="predictButton" onclick="startInference()">
+    What kind of cuisine can you make?
+</button>
+<p id="result" aria-live="polite"></p>
+<script>
+    const ingredients = Array(380).fill(0);
+    const checks = document.querySelectorAll('.checkbox');
+    const resultElement = document.getElementById('result');
+    const predictButton = document.getElementById('predictButton');
+    let session = null;
+    // Track selected ingredients
+    checks.forEach(check => {
+        check.addEventListener('change', function () {
+            const index = Number(check.value);
+            if (index < 0 || index >= ingredients.length) {
+                console.error("Invalid ingredient index:", index);
+                return;
+            }
+            ingredients[index] = check.checked ? 1 : 0;
+        });
+    });
+    // Check if at least one ingredient is selected
+    function testCheckboxes() {
+        return [...checks].some(check => check.checked);
+    }
+    // Load ONNX model
+    async function loadModel() {
+        if (!session) {
+            session = await ort.InferenceSession.create('./model.onnx');
+        }
+        return session;
+    }
+    // Run prediction
+    async function startInference() {
+        if (!testCheckboxes()) {
+            resultElement.textContent = "Please select at least one ingredient.";
+            return;
+        }
+        predictButton.disabled = true;
+        resultElement.textContent = "Analyzing your ingredients...";
+        try {
+            const model = await loadModel();
+            const input = new ort.Tensor(
+                'float32',
+                new Float32Array(ingredients),
+                [1, 380]
+            );
+            const inputName = model.inputNames[0];
+            const outputName = model.outputNames[0];
+            const feeds = {
+                [inputName]: input
+            };
+            const results = await model.run(feeds);
+            const prediction = results[outputName];
+            resultElement.textContent =
+                "You can enjoy " + prediction.data[0] + " cuisine today!";
+        } catch (error) {
+            console.error("ONNX inference failed:", error);
+            resultElement.textContent =
+                "Something went wrong while predicting. Check the browser console.";
+        } finally {
+            predictButton.disabled = false;
+        }
+    }
+</script>
+</body>
+</html>
